@@ -5,9 +5,14 @@ import './App.css';
 const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [registerData, setRegisterData] = useState({ username: '', email: '', password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [registerError, setRegisterError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentView, setCurrentView] = useState('login'); // 'login' oder 'register'
+  const [registeredUsers, setRegisteredUsers] = useState([]);
 
   // Simulierte Benutzer (in echter App würde das von einer API kommen)
   const mockUsers = [
@@ -22,6 +27,12 @@ const App = () => {
     if (savedUser) {
       setCurrentUser(JSON.parse(savedUser));
     }
+    
+    // Gespeicherte registrierte Benutzer laden
+    const savedRegisteredUsers = localStorage.getItem('registeredUsers');
+    if (savedRegisteredUsers) {
+      setRegisteredUsers(JSON.parse(savedRegisteredUsers));
+    }
   }, []);
 
   const handleLogin = async () => {
@@ -30,7 +41,9 @@ const App = () => {
 
     // Simuliere API-Aufruf
     setTimeout(() => {
-      const user = mockUsers.find(
+      // Kombiniere Mock-Users und registrierte Benutzer
+      const allUsers = [...mockUsers, ...registeredUsers];
+      const user = allUsers.find(
         u => u.username === loginData.username && u.password === loginData.password
       );
 
@@ -38,7 +51,7 @@ const App = () => {
         const userSession = {
           id: user.id,
           username: user.username,
-          role: user.role,
+          role: user.role || 'user',
           loginTime: new Date().toISOString()
         };
         setCurrentUser(userSession);
@@ -51,16 +64,92 @@ const App = () => {
     }, 1000);
   };
 
+  const handleRegister = async () => {
+    setIsLoading(true);
+    setRegisterError('');
+
+    // Validierung
+    if (registerData.password !== registerData.confirmPassword) {
+      setRegisterError('Passwörter stimmen nicht überein.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (registerData.password.length < 6) {
+      setRegisterError('Passwort muss mindestens 6 Zeichen lang sein.');
+      setIsLoading(false);
+      return;
+    }
+
+    // Simuliere API-Aufruf
+    setTimeout(() => {
+      // Prüfe ob Benutzername bereits existiert
+      const allUsers = [...mockUsers, ...registeredUsers];
+      const existingUser = allUsers.find(u => u.username === registerData.username);
+
+      if (existingUser) {
+        setRegisterError('Benutzername bereits vergeben. Bitte wählen Sie einen anderen.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Neuen Benutzer erstellen
+      const newUser = {
+        id: Date.now(), // Einfache ID-Generation
+        username: registerData.username,
+        email: registerData.email,
+        password: registerData.password,
+        role: 'user'
+      };
+
+      const updatedUsers = [...registeredUsers, newUser];
+      setRegisteredUsers(updatedUsers);
+      localStorage.setItem('registeredUsers', JSON.stringify(updatedUsers));
+
+      // Automatisch einloggen
+      const userSession = {
+        id: newUser.id,
+        username: newUser.username,
+        role: newUser.role,
+        loginTime: new Date().toISOString()
+      };
+      setCurrentUser(userSession);
+      sessionStorage.setItem('currentUser', JSON.stringify(userSession));
+      setRegisterData({ username: '', email: '', password: '', confirmPassword: '' });
+      setIsLoading(false);
+    }, 1000);
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem('currentUser');
     setLoginData({ username: '', password: '' });
+    setRegisterData({ username: '', email: '', password: '', confirmPassword: '' });
     setLoginError('');
+    setRegisterError('');
+    setCurrentView('login');
   };
 
-  const handleInputChange = (field, value) => {
-    setLoginData(prev => ({ ...prev, [field]: value }));
-    if (loginError) setLoginError('');
+  const handleInputChange = (form, field, value) => {
+    if (form === 'login') {
+      setLoginData(prev => ({ ...prev, [field]: value }));
+      if (loginError) setLoginError('');
+    } else {
+      setRegisterData(prev => ({ ...prev, [field]: value }));
+      if (registerError) setRegisterError('');
+    }
+  };
+
+  const switchToRegister = () => {
+    setCurrentView('register');
+    setLoginError('');
+    setRegisterError('');
+  };
+
+  const switchToLogin = () => {
+    setCurrentView('login');
+    setLoginError('');
+    setRegisterError('');
   };
 
   // Login Form Component
@@ -85,11 +174,11 @@ const App = () => {
               <input
                 type="text"
                 value={loginData.username}
-                onChange={(e) => handleInputChange('username', e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                onChange={(e) => handleInputChange('login', 'username', e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Benutzername eingeben"
-                required
+                autoComplete="username"
               />
             </div>
           </div>
@@ -103,11 +192,11 @@ const App = () => {
               <input
                 type={showPassword ? "text" : "password"}
                 value={loginData.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                onChange={(e) => handleInputChange('login', 'password', e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Passwort eingeben"
-                required
+                autoComplete="current-password"
               />
               <button
                 type="button"
@@ -134,6 +223,16 @@ const App = () => {
           >
             {isLoading ? 'Wird angemeldet...' : 'Anmelden'}
           </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={switchToRegister}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              Noch kein Konto? Jetzt registrieren
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 p-4 bg-gray-50 rounded-lg">
@@ -142,6 +241,131 @@ const App = () => {
             <div>admin / admin123 (Administrator)</div>
             <div>user / user123 (Benutzer)</div>
             <div>manager / manager123 (Manager)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Register Form Component
+  const RegisterForm = () => (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="mx-auto w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
+            <User className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Registrierung</h1>
+          <p className="text-gray-600 mt-2">Erstellen Sie Ihr neues Konto</p>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Benutzername
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={registerData.username}
+                onChange={(e) => handleInputChange('register', 'username', e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Benutzername wählen"
+                autoComplete="username"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              E-Mail
+            </label>
+            <div className="relative">
+              <input
+                type="email"
+                value={registerData.email}
+                onChange={(e) => handleInputChange('register', 'email', e.target.value)}
+                className="w-full pl-4 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="ihre.email@beispiel.com"
+                autoComplete="email"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Passwort
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type={showPassword ? "text" : "password"}
+                value={registerData.password}
+                onChange={(e) => handleInputChange('register', 'password', e.target.value)}
+                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Mindestens 6 Zeichen"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Passwort bestätigen
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                value={registerData.confirmPassword}
+                onChange={(e) => handleInputChange('register', 'confirmPassword', e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Passwort wiederholen"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          {registerError && (
+            <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-lg">
+              <AlertCircle className="w-5 h-5" />
+              <span className="text-sm">{registerError}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleRegister}
+            disabled={isLoading || !registerData.username || !registerData.email || !registerData.password || !registerData.confirmPassword}
+            className="w-full bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {isLoading ? 'Wird registriert...' : 'Registrieren'}
+          </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={switchToLogin}
+              className="text-green-600 hover:text-green-700 text-sm font-medium"
+            >
+              Bereits ein Konto? Jetzt anmelden
+            </button>
           </div>
         </div>
       </div>
@@ -238,7 +462,7 @@ const App = () => {
     </div>
   );
 
-  return currentUser ? <Dashboard /> : <LoginForm />;
+  return currentUser ? <Dashboard /> : (currentView === 'login' ? <LoginForm /> : <RegisterForm />);
 };
 
 export default App;
