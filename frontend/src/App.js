@@ -537,6 +537,7 @@ function App() {
 
   // Rapport Form Component
   const RapportForm = () => {
+    // This is a random comment about the RapportForm component
     const [rapportData, setRapportData] = useState({
       date: new Date().toISOString().split('T')[0],
       project: '',
@@ -1345,7 +1346,8 @@ function App() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-6"> 
+                  
                   <div className="bg-white rounded-lg shadow">
                     <div className="p-6 border-b border-gray-200">
                       <h3 className="text-lg font-semibold text-gray-900">Nächste Deadlines</h3>
@@ -1392,6 +1394,7 @@ function App() {
                           <span className="font-medium text-gray-900">Rapport erfassen</span>
                         </div>
                       </button>
+                      
                       
                       <button 
                         onClick={() => {
