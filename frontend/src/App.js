@@ -207,8 +207,10 @@ const groupProjectsByCustomer = (projects) => {
 
   // Session handling
   useEffect(() => {
+    // Check for JWT and user info in sessionStorage on app load
     const savedUser = sessionStorage.getItem('currentUser');
-    if (savedUser) {
+    const token = sessionStorage.getItem('access_token');
+    if (savedUser && token) {
       setCurrentUser(JSON.parse(savedUser));
     }
     
@@ -1152,6 +1154,32 @@ const groupProjectsByCustomer = (projects) => {
     const { projects, upcomingTasks } = getDashboardData();
     const activeProjects = projects.filter(p => p.status !== 'completed');
 
+    // Check session with protected endpoint
+    const checkSession = async () => {
+      const token = sessionStorage.getItem('access_token');
+      if (!token) {
+        alert('No session token found.');
+        return;
+      }
+      try {
+        const response = await fetch('http://localhost:8000/protected', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.status === 401 || response.status === 403) {
+          // Token invalid or expired, log out
+          handleLogout();
+          alert('Session abgelaufen. Bitte erneut anmelden.');
+          return;
+        }
+        const data = await response.json();
+        alert(JSON.stringify(data));
+      } catch (err) {
+        alert('Netzwerkfehler beim Prüfen der Session.');
+      }
+    };
+
     return (
       <div className="min-h-screen bg-gray-50">
         <nav className="bg-white shadow-sm border-b">
@@ -1415,6 +1443,12 @@ const groupProjectsByCustomer = (projects) => {
                   </div>
                 </div>
               </div>
+              <button
+                onClick={checkSession}
+                className="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+              >
+                Session prüfen
+              </button>
             </div>
           )}
         </main>
