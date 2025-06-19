@@ -141,69 +141,69 @@ function App() {
   };
 
   // Helper Functions
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'text-green-600 bg-green-100';
-      case 'in_progress': return 'text-blue-600 bg-blue-100';
-      case 'planning': return 'text-yellow-600 bg-yellow-100';
-      default: return 'text-gray-600 bg-gray-100';
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'completed': return 'text-green-600 bg-green-100';
+    case 'in_progress': return 'text-blue-600 bg-blue-100';
+    case 'planning': return 'text-yellow-600 bg-yellow-100';
+    default: return 'text-gray-600 bg-gray-100';
+  }
+};
+
+const getStatusText = (status) => {
+  switch (status) {
+    case 'completed': return 'Abgeschlossen';
+    case 'in_progress': return 'In Bearbeitung';
+    case 'planning': return 'Planung';
+    default: return 'Unbekannt';
+  }
+};
+
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case 'high': return 'text-red-600 bg-red-100';
+    case 'medium': return 'text-yellow-600 bg-yellow-100';
+    case 'low': return 'text-green-600 bg-green-100';
+    default: return 'text-gray-600 bg-gray-100';
+  }
+};
+
+const getPriorityText = (priority) => {
+  switch (priority) {
+    case 'high': return 'Hoch';
+    case 'medium': return 'Mittel';
+    case 'low': return 'Niedrig';
+    default: return 'Normal';
+  }
+};
+
+const formatDeadline = (deadline) => {
+  const date = new Date(deadline);
+  const today = new Date();
+  const diffTime = date - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 0) return { text: 'Überfällig', color: 'text-red-600' };
+  if (diffDays === 0) return { text: 'Heute', color: 'text-red-600' };
+  if (diffDays === 1) return { text: 'Morgen', color: 'text-orange-600' };
+  if (diffDays <= 7) return { text: `${diffDays} Tage`, color: 'text-yellow-600' };
+  return { text: date.toLocaleDateString('de-DE'), color: 'text-gray-600' };
+};
+
+const groupProjectsByCustomer = (projects) => {
+  const grouped = {};
+  projects.forEach(project => {
+    const customerName = project.customer.name;
+    if (!grouped[customerName]) {
+      grouped[customerName] = {
+        customer: project.customer,
+        projects: []
+      };
     }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'completed': return 'Abgeschlossen';
-      case 'in_progress': return 'In Bearbeitung';
-      case 'planning': return 'Planung';
-      default: return 'Unbekannt';
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'high': return 'text-red-600 bg-red-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-green-600 bg-green-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getPriorityText = (priority) => {
-    switch (priority) {
-      case 'high': return 'Hoch';
-      case 'medium': return 'Mittel';
-      case 'low': return 'Niedrig';
-      default: return 'Normal';
-    }
-  };
-
-  const formatDeadline = (deadline) => {
-    const date = new Date(deadline);
-    const today = new Date();
-    const diffTime = date - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return { text: 'Überfällig', color: 'text-red-600' };
-    if (diffDays === 0) return { text: 'Heute', color: 'text-red-600' };
-    if (diffDays === 1) return { text: 'Morgen', color: 'text-orange-600' };
-    if (diffDays <= 7) return { text: `${diffDays} Tage`, color: 'text-yellow-600' };
-    return { text: date.toLocaleDateString('de-DE'), color: 'text-gray-600' };
-  };
-
-  const groupProjectsByCustomer = (projects) => {
-    const grouped = {};
-    projects.forEach(project => {
-      const customerName = project.customer.name;
-      if (!grouped[customerName]) {
-        grouped[customerName] = {
-          customer: project.customer,
-          projects: []
-        };
-      }
-      grouped[customerName].projects.push(project);
-    });
-    return grouped;
-  };
+    grouped[customerName].projects.push(project);
+  });
+  return grouped;
+};
 
   // Session handling
   useEffect(() => {
@@ -222,27 +222,33 @@ function App() {
     setIsLoading(true);
     setLoginError('');
 
-    setTimeout(() => {
-      const allUsers = [...mockUsers, ...registeredUsers];
-      const user = allUsers.find(
-        u => u.username === loginData.username && u.password === loginData.password
-      );
-
-      if (user) {
-        const userSession = {
-          id: user.id,
-          username: user.username,
-          role: user.role || 'user',
-          loginTime: new Date().toISOString()
-        };
-        setCurrentUser(userSession);
-        sessionStorage.setItem('currentUser', JSON.stringify(userSession));
-        setLoginData({ username: '', password: '' });
-      } else {
-        setLoginError('Ungültige Anmeldedaten. Bitte versuchen Sie es erneut.');
+    try {
+      const response = await fetch('http://localhost:8000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: loginData.username,
+          password: loginData.password
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setLoginError(data.detail || 'Login fehlgeschlagen.');
+        setIsLoading(false);
+        return;
       }
+      const data = await response.json();
+      // Save JWT token in sessionStorage
+      sessionStorage.setItem('access_token', data.access_token);
+      // Save user info in sessionStorage (for UI)
+      setCurrentUser({ username: loginData.username, loginTime: new Date().toISOString(), role: 'user' });
+      sessionStorage.setItem('currentUser', JSON.stringify({ username: loginData.username, loginTime: new Date().toISOString(), role: 'user' }));
+      setLoginData({ username: '', password: '' });
       setIsLoading(false);
-    }, 1000);
+    } catch (err) {
+      setLoginError('Netzwerkfehler.');
+      setIsLoading(false);
+    }
   };
 
   const handleRegister = async () => {
@@ -261,39 +267,29 @@ function App() {
       return;
     }
 
-    setTimeout(() => {
-      const allUsers = [...mockUsers, ...registeredUsers];
-      const existingUser = allUsers.find(u => u.username === registerData.username);
-
-      if (existingUser) {
-        setRegisterError('Benutzername bereits vergeben. Bitte wählen Sie einen anderen.');
+    try {
+      const response = await fetch('http://localhost:8000/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: registerData.username,
+          password: registerData.password
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setRegisterError(data.detail || 'Registrierung fehlgeschlagen.');
         setIsLoading(false);
         return;
       }
-
-      const newUser = {
-        id: Date.now(),
-        username: registerData.username,
-        email: registerData.email,
-        password: registerData.password,
-        role: 'user'
-      };
-
-      const updatedUsers = [...registeredUsers, newUser];
-      setRegisteredUsers(updatedUsers);
-      localStorage.setItem('registeredUsers', JSON.stringify(updatedUsers));
-
-      const userSession = {
-        id: newUser.id,
-        username: newUser.username,
-        role: newUser.role,
-        loginTime: new Date().toISOString()
-      };
-      setCurrentUser(userSession);
-      sessionStorage.setItem('currentUser', JSON.stringify(userSession));
+      // Auto-login after registration
+      await handleLogin({ username: registerData.username, password: registerData.password });
       setRegisterData({ username: '', email: '', password: '', confirmPassword: '' });
       setIsLoading(false);
-    }, 1000);
+    } catch (err) {
+      setRegisterError('Netzwerkfehler.');
+      setIsLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -865,260 +861,260 @@ function App() {
     );
   };
 
-  // Projects by Customer Component
+// Projects by Customer Component
   const ProjectsByCustomer = () => {
     const { projects } = getDashboardData();
     
-    const getFilteredAndGroupedProjects = () => {
-      if (projectFilter === 'by_customer') {
-        return groupProjectsByCustomer(projects);
-      } else if (projectFilter === 'by_status') {
-        const grouped = {};
-        projects.forEach(project => {
-          const status = getStatusText(project.status);
-          if (!grouped[status]) {
-            grouped[status] = { projects: [] };
-          }
-          grouped[status].projects.push(project);
-        });
-        return grouped;
-      } else if (projectFilter === 'by_priority') {
-        const grouped = {};
-        projects.forEach(project => {
-          const priority = getPriorityText(project.priority);
-          if (!grouped[priority]) {
-            grouped[priority] = { projects: [] };
-          }
-          grouped[priority].projects.push(project);
-        });
-        return grouped;
-      } else {
-        return { 'Alle Projekte': { projects: projects } };
-      }
-    };
+  const getFilteredAndGroupedProjects = () => {
+    if (projectFilter === 'by_customer') {
+      return groupProjectsByCustomer(projects);
+    } else if (projectFilter === 'by_status') {
+      const grouped = {};
+      projects.forEach(project => {
+        const status = getStatusText(project.status);
+        if (!grouped[status]) {
+          grouped[status] = { projects: [] };
+        }
+        grouped[status].projects.push(project);
+      });
+      return grouped;
+    } else if (projectFilter === 'by_priority') {
+      const grouped = {};
+      projects.forEach(project => {
+        const priority = getPriorityText(project.priority);
+        if (!grouped[priority]) {
+          grouped[priority] = { projects: [] };
+        }
+        grouped[priority].projects.push(project);
+      });
+      return grouped;
+    } else {
+      return { 'Alle Projekte': { projects: projects } };
+    }
+  };
 
-    const groupedData = getFilteredAndGroupedProjects();
-    const groupNames = Object.keys(groupedData).sort();
+  const groupedData = getFilteredAndGroupedProjects();
+  const groupNames = Object.keys(groupedData).sort();
 
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between mb-6">
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+            <User className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Projekt-Übersicht</h2>
+            <p className="text-sm text-gray-600">Projekte nach verschiedenen Kriterien gruppiert</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setDashboardView('overview')}
+          className="text-gray-600 hover:text-gray-800 text-sm font-medium"
+        >
+          ← Zurück zur Übersicht
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <label className="text-sm font-medium text-gray-700">Gruppierung:</label>
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+            >
+              <option value="all">Alle Projekte</option>
+              <option value="by_customer">Nach Kunden</option>
+              <option value="by_status">Nach Status</option>
+              <option value="by_priority">Nach Priorität</option>
+            </select>
+          </div>
+          <div className="text-sm text-gray-600">
+            {projects.length} Projekte • {Object.keys(groupedData).length} Gruppen
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Projekt-Übersicht</h2>
-              <p className="text-sm text-gray-600">Projekte nach verschiedenen Kriterien gruppiert</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setDashboardView('overview')}
-            className="text-gray-600 hover:text-gray-800 text-sm font-medium"
-          >
-            ← Zurück zur Übersicht
-          </button>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <label className="text-sm font-medium text-gray-700">Gruppierung:</label>
-              <select
-                value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-              >
-                <option value="all">Alle Projekte</option>
-                <option value="by_customer">Nach Kunden</option>
-                <option value="by_status">Nach Status</option>
-                <option value="by_priority">Nach Priorität</option>
-              </select>
-            </div>
-            <div className="text-sm text-gray-600">
-              {projects.length} Projekte • {Object.keys(groupedData).length} Gruppen
+              <h3 className="font-medium text-gray-900">
+                {projectFilter === 'by_customer' ? 
+                  new Set(projects.map(p => p.customer.name)).size : 
+                  groupNames.length}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {projectFilter === 'by_customer' ? 'Kunden' : 
+                 projectFilter === 'by_status' ? 'Status-Gruppen' :
+                 projectFilter === 'by_priority' ? 'Prioritäts-Gruppen' : 'Gruppen'}
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">
-                  {projectFilter === 'by_customer' ? 
-                    new Set(projects.map(p => p.customer.name)).size : 
-                    groupNames.length}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {projectFilter === 'by_customer' ? 'Kunden' : 
-                   projectFilter === 'by_status' ? 'Status-Gruppen' :
-                   projectFilter === 'by_priority' ? 'Prioritäts-Gruppen' : 'Gruppen'}
-                </p>
-              </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-4 h-4 text-white" />
             </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">{projects.length}</h3>
-                <p className="text-sm text-gray-600">Gesamte Projekte</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-yellow-600 rounded-full flex items-center justify-center">
-                <Clock className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">
-                  {projects.reduce((sum, project) => sum + project.milestones.length, 0)}
-                </h3>
-                <p className="text-sm text-gray-600">Gesamte Milestones</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">
-                  {projects.filter(p => p.status === 'in_progress').length}
-                </h3>
-                <p className="text-sm text-gray-600">Aktive Projekte</p>
-              </div>
+            <div>
+              <h3 className="font-medium text-gray-900">{projects.length}</h3>
+              <p className="text-sm text-gray-600">Gesamte Projekte</p>
             </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          {groupNames.map(groupName => {
-            const groupData = groupedData[groupName];
-            const groupProjects = groupData.projects;
-            
-            const completedProjects = groupProjects.filter(p => p.status === 'completed').length;
-            const totalMilestones = groupProjects.reduce((sum, p) => sum + p.milestones.length, 0);
-            const completedMilestones = groupProjects.reduce((sum, p) => 
-              sum + p.milestones.filter(m => m.status === 'completed').length, 0
-            );
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-yellow-600 rounded-full flex items-center justify-center">
+              <Clock className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900">
+                {projects.reduce((sum, project) => sum + project.milestones.length, 0)}
+              </h3>
+              <p className="text-sm text-gray-600">Gesamte Milestones</p>
+            </div>
+          </div>
+        </div>
 
-            return (
-              <div key={groupName} className="bg-white rounded-lg shadow">
-                <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
-                          {projectFilter === 'by_customer' ? <User className="w-6 h-6 text-white" /> :
-                           projectFilter === 'by_status' ? <CheckCircle className="w-6 h-6 text-white" /> :
-                           projectFilter === 'by_priority' ? <AlertCircle className="w-6 h-6 text-white" /> :
-                           <FileText className="w-6 h-6 text-white" />}
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-semibold text-gray-900">{groupName}</h3>
-                          {projectFilter === 'by_customer' && groupData.customer && (
-                            <p className="text-sm text-gray-600">{groupData.customer.industry}</p>
-                          )}
-                        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900">
+                {projects.filter(p => p.status === 'in_progress').length}
+              </h3>
+              <p className="text-sm text-gray-600">Aktive Projekte</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {groupNames.map(groupName => {
+          const groupData = groupedData[groupName];
+          const groupProjects = groupData.projects;
+          
+          const completedProjects = groupProjects.filter(p => p.status === 'completed').length;
+          const totalMilestones = groupProjects.reduce((sum, p) => sum + p.milestones.length, 0);
+          const completedMilestones = groupProjects.reduce((sum, p) => 
+            sum + p.milestones.filter(m => m.status === 'completed').length, 0
+          );
+
+          return (
+            <div key={groupName} className="bg-white rounded-lg shadow">
+              <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
+                        {projectFilter === 'by_customer' ? <User className="w-6 h-6 text-white" /> :
+                         projectFilter === 'by_status' ? <CheckCircle className="w-6 h-6 text-white" /> :
+                         projectFilter === 'by_priority' ? <AlertCircle className="w-6 h-6 text-white" /> :
+                         <FileText className="w-6 h-6 text-white" />}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900">{groupName}</h3>
+                        {projectFilter === 'by_customer' && groupData.customer && (
+                          <p className="text-sm text-gray-600">{groupData.customer.industry}</p>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                          <div className="text-lg font-semibold text-gray-900">{groupProjects.length}</div>
-                          <div className="text-xs text-gray-600">Projekte</div>
-                        </div>
-                        <div>
-                          <div className="text-lg font-semibold text-green-600">{completedProjects}</div>
-                          <div className="text-xs text-gray-600">Abgeschlossen</div>
-                        </div>
-                        <div>
-                          <div className="text-lg font-semibold text-blue-600">{completedMilestones}/{totalMilestones}</div>
-                          <div className="text-xs text-gray-600">Milestones</div>
-                        </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <div className="text-lg font-semibold text-gray-900">{groupProjects.length}</div>
+                        <div className="text-xs text-gray-600">Projekte</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold text-green-600">{completedProjects}</div>
+                        <div className="text-xs text-gray-600">Abgeschlossen</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold text-blue-600">{completedMilestones}/{totalMilestones}</div>
+                        <div className="text-xs text-gray-600">Milestones</div>
                       </div>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="p-6">
-                  <div className="space-y-4">
-                    {groupProjects.map(project => {
-                      const deadline = formatDeadline(project.deadline);
-                      return (
-                        <div key={project.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                          <div className="p-4 bg-gray-50">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <span className="font-semibold text-gray-900">{project.code}</span>
-                                <span className="text-gray-600">•</span>
-                                <span className="text-gray-900">{project.name}</span>
-                                {projectFilter !== 'by_customer' && (
-                                  <>
-                                    <span className="text-gray-600">•</span>
-                                    <span className="text-sm text-purple-600 font-medium">{project.customer.name}</span>
-                                  </>
-                                )}
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                                  {getStatusText(project.status)}
-                                </span>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>
-                                  {getPriorityText(project.priority)}
-                                </span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-medium text-gray-900">{project.progress}%</div>
-                                <div className={`text-xs ${deadline.color}`}>{deadline.text}</div>
-                              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  {groupProjects.map(project => {
+                    const deadline = formatDeadline(project.deadline);
+                    return (
+                      <div key={project.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="p-4 bg-gray-50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-semibold text-gray-900">{project.code}</span>
+                              <span className="text-gray-600">•</span>
+                              <span className="text-gray-900">{project.name}</span>
+                              {projectFilter !== 'by_customer' && (
+                                <>
+                                  <span className="text-gray-600">•</span>
+                                  <span className="text-sm text-purple-600 font-medium">{project.customer.name}</span>
+                                </>
+                              )}
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                                {getStatusText(project.status)}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(project.priority)}`}>
+                                {getPriorityText(project.priority)}
+                              </span>
                             </div>
-                            
-                            <div className="mt-3">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm text-gray-600">Projektfortschritt</span>
-                                <span className="text-sm text-gray-600">
-                                  {project.tasksCompleted}/{project.tasksTotal} Aufgaben
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div 
-                                  className={`h-2 rounded-full transition-all ${
-                                    project.progress === 100 ? 'bg-green-500' : 
-                                    project.progress >= 75 ? 'bg-blue-500' : 
-                                    project.progress >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                                  }`}
-                                  style={{ width: `${project.progress}%` }}
-                                ></div>
-                              </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-gray-900">{project.progress}%</div>
+                                <div className={`text-xs ${deadline.color}`}>{deadline.text}</div>
                             </div>
                           </div>
+                          
+                          <div className="mt-3">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm text-gray-600">Projektfortschritt</span>
+                              <span className="text-sm text-gray-600">
+                                {project.tasksCompleted}/{project.tasksTotal} Aufgaben
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full transition-all ${
+                                  project.progress === 100 ? 'bg-green-500' : 
+                                  project.progress >= 75 ? 'bg-blue-500' : 
+                                  project.progress >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${project.progress}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
 
-                          <div className="p-4">
-                            <h4 className="text-sm font-medium text-gray-900 mb-3">
-                              Milestones ({project.milestones.filter(m => m.status === 'completed').length}/{project.milestones.length})
-                            </h4>
-                            <div className="space-y-2">
-                              {project.milestones.map(milestone => {
-                                const milestoneDeadline = formatDeadline(milestone.deadline);
-                                return (
-                                  <div key={milestone.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                    <div className="flex items-center space-x-3">
-                                      <div className={`w-3 h-3 rounded-full ${
-                                        milestone.status === 'completed' ? 'bg-green-500' :
-                                        milestone.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300'
-                                      }`}></div>
-                                      <span className="text-sm font-medium text-gray-900">{milestone.name}</span>
+                        <div className="p-4">
+                          <h4 className="text-sm font-medium text-gray-900 mb-3">
+                            Milestones ({project.milestones.filter(m => m.status === 'completed').length}/{project.milestones.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {project.milestones.map(milestone => {
+                              const milestoneDeadline = formatDeadline(milestone.deadline);
+                              return (
+                                <div key={milestone.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`w-3 h-3 rounded-full ${
+                                      milestone.status === 'completed' ? 'bg-green-500' :
+                                      milestone.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-300'
+                                    }`}></div>
+                                    <span className="text-sm font-medium text-gray-900">{milestone.name}</span>
                                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                         milestone.status === 'completed' ? 'text-green-600 bg-green-100' :
                                         milestone.status === 'in_progress' ? 'text-blue-600 bg-blue-100' :
@@ -1126,30 +1122,30 @@ function App() {
                                       }`}>
                                         {milestone.status === 'completed' ? 'Abgeschlossen' :
                                          milestone.status === 'in_progress' ? 'In Bearbeitung' : 'Geplant'}
-                                      </span>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className={`text-xs font-medium ${milestoneDeadline.color}`}>
-                                        {milestoneDeadline.text}
-                                      </div>
+                                    </span>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className={`text-xs font-medium ${milestoneDeadline.color}`}>
+                                      {milestoneDeadline.text}
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // Dashboard Component
   const Dashboard = () => {
